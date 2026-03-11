@@ -35,8 +35,8 @@ dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
 // Slope + borders
-const slopeLength = 220;
-const slopeWidth = 9;
+const slopeLength = 200;
+const slopeWidth = 10;
 
 const track = new THREE.Group();
 
@@ -80,7 +80,12 @@ rightRail.position.set(railOffsetX, railHeight / 2, 0);
 track.add(leftRail);
 track.add(rightRail);
 
-track.rotation.x = -0.4;
+// Tilt the play surface, but keep ball/obstacles in the same world plane
+const slopeTilt = -0.4;
+slope.rotation.x = slopeTilt;
+leftRail.rotation.x = slopeTilt;
+rightRail.rotation.x = slopeTilt;
+
 scene.add(track);
 
 // === Four-color spiky ball ===
@@ -185,10 +190,9 @@ scene.add(ball);
 const obstacles = [];
 let obstacleSpawnZ = -20;
 
-// Difficulty / spacing tuning
-const obstacleSpacingMin = 26;
-const obstacleSpacingMax = 34;
-const maxActiveObstacleSpan = slopeLength - 110;
+// Obstacle spacing (wider gaps, fewer obstacles)
+const obstacleSpacingMin = 18;
+const obstacleSpacingMax = 26;
 
 // Game state
 let isRunning = false;
@@ -263,7 +267,7 @@ function spawnObstacle() {
   obstacles.push({ mesh, width, depth });
   scene.add(mesh);
 
-  // Advance spawn position with generous spacing
+  // Advance spawn position with generous but regular spacing
   const spacing =
     obstacleSpacingMin +
     Math.random() * (obstacleSpacingMax - obstacleSpacingMin);
@@ -286,21 +290,10 @@ function updateObstacles(delta) {
     (minZ, o) => Math.min(minZ, o.mesh.position.z),
     0
   );
-  // Fill ahead of the player with a gentle density curve.
-  while (farthestZ - obstacleSpawnZ < maxActiveObstacleSpan) {
-    // Start with low obstacle probability and ramp up with score.
-    const difficulty = Math.min(score / 600, 1); // 0 → 1 as you survive
-    const spawnChance = 0.35 + difficulty * 0.45; // 0.35 → 0.8
-
-    if (Math.random() < spawnChance) {
-      spawnObstacle();
-    } else {
-      // Even when we skip an obstacle, move spawn Z so we create wider gaps.
-      const spacing =
-        obstacleSpacingMin +
-        Math.random() * (obstacleSpacingMax - obstacleSpacingMin);
-      obstacleSpawnZ -= spacing;
-    }
+  // Keep obstacles spanning a bit less of the slope so there are fewer overall.
+  const maxSpan = slopeLength - 90;
+  while (farthestZ - obstacleSpawnZ < maxSpan) {
+    spawnObstacle();
   }
 }
 
