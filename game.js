@@ -34,20 +34,54 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
 dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
-// Slope
-const slopeLength = 200;
-const slopeWidth = 10;
+// Slope + borders
+const slopeLength = 220;
+const slopeWidth = 9;
+
+const track = new THREE.Group();
 
 const slopeGeo = new THREE.BoxGeometry(slopeWidth, 0.5, slopeLength);
 const slopeMat = new THREE.MeshStandardMaterial({
-  color: 0x0f172a,
-  metalness: 0.3,
-  roughness: 0.5,
+  color: 0x020617,
+  metalness: 0.4,
+  roughness: 0.4,
 });
 const slope = new THREE.Mesh(slopeGeo, slopeMat);
-slope.rotation.x = -0.4;
 slope.receiveShadow = true;
-scene.add(slope);
+track.add(slope);
+
+// Glowing side rails to visually mark borders
+const railThickness = 0.25;
+const railHeight = 0.6;
+const railOffsetX = slopeWidth / 2 + railThickness * 0.4;
+const railGeo = new THREE.BoxGeometry(railThickness, railHeight, slopeLength);
+
+const leftRailMat = new THREE.MeshStandardMaterial({
+  color: 0x22c55e,
+  emissive: 0x22c55e,
+  emissiveIntensity: 0.5,
+  metalness: 0.7,
+  roughness: 0.3,
+});
+const rightRailMat = new THREE.MeshStandardMaterial({
+  color: 0x3b82f6,
+  emissive: 0x3b82f6,
+  emissiveIntensity: 0.5,
+  metalness: 0.7,
+  roughness: 0.3,
+});
+
+const leftRail = new THREE.Mesh(railGeo, leftRailMat);
+leftRail.position.set(-railOffsetX, railHeight / 2, 0);
+
+const rightRail = new THREE.Mesh(railGeo, rightRailMat);
+rightRail.position.set(railOffsetX, railHeight / 2, 0);
+
+track.add(leftRail);
+track.add(rightRail);
+
+track.rotation.x = -0.4;
+scene.add(track);
 
 // === Four-color spiky ball ===
 const ball = new THREE.Group();
@@ -151,6 +185,11 @@ scene.add(ball);
 const obstacles = [];
 let obstacleSpawnZ = -20;
 
+// Difficulty / spacing tuning
+const obstacleSpacingMin = 26;
+const obstacleSpacingMax = 34;
+const maxActiveObstacleSpan = slopeLength - 110;
+
 // Game state
 let isRunning = false;
 let speed = 0.25;
@@ -224,7 +263,11 @@ function spawnObstacle() {
   obstacles.push({ mesh, width, depth });
   scene.add(mesh);
 
-  obstacleSpawnZ -= 6 + Math.random() * 6;
+  // Advance spawn position with generous spacing
+  const spacing =
+    obstacleSpacingMin +
+    Math.random() * (obstacleSpacingMax - obstacleSpacingMin);
+  obstacleSpawnZ -= spacing;
 }
 
 function updateObstacles(delta) {
@@ -243,8 +286,21 @@ function updateObstacles(delta) {
     (minZ, o) => Math.min(minZ, o.mesh.position.z),
     0
   );
-  while (farthestZ - obstacleSpawnZ < slopeLength - 40) {
-    spawnObstacle();
+  // Fill ahead of the player with a gentle density curve.
+  while (farthestZ - obstacleSpawnZ < maxActiveObstacleSpan) {
+    // Start with low obstacle probability and ramp up with score.
+    const difficulty = Math.min(score / 600, 1); // 0 → 1 as you survive
+    const spawnChance = 0.35 + difficulty * 0.45; // 0.35 → 0.8
+
+    if (Math.random() < spawnChance) {
+      spawnObstacle();
+    } else {
+      // Even when we skip an obstacle, move spawn Z so we create wider gaps.
+      const spacing =
+        obstacleSpacingMin +
+        Math.random() * (obstacleSpacingMax - obstacleSpacingMin);
+      obstacleSpawnZ -= spacing;
+    }
   }
 }
 
@@ -316,7 +372,7 @@ function animate() {
     lateralSpeed = Math.max(-maxLateralSpeed, Math.min(maxLateralSpeed, lateralSpeed));
 
     ball.position.x += lateralSpeed;
-    const maxX = slopeWidth / 2 - 0.6;
+    const maxX = slopeWidth / 2 - 0.8;
     ball.position.x = Math.max(-maxX, Math.min(maxX, ball.position.x));
 
     ball.position.z -= speed * 60 * delta;
